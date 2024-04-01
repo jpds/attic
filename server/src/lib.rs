@@ -39,11 +39,13 @@ use axum::{
     Router,
 };
 use axum::routing::get;
+use metrics::gauge;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use sea_orm::{query::Statement, ConnectionTrait, Database, DatabaseConnection};
 use tokio::sync::OnceCell;
 use tokio::time;
 use tower_http::catch_panic::CatchPanicLayer;
+use tower_http::compression::CompressionLayer;
 use tower_http::trace::TraceLayer;
 
 use access::http::{apply_auth, AuthState};
@@ -243,6 +245,8 @@ fn setup_metrics_recorder() -> PrometheusHandle {
         0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
     ];
 
+    gauge!("testing").set(42.0);
+
     PrometheusBuilder::new()
         .set_buckets_for_metric(
             Matcher::Full("http_requests_duration_seconds".to_string()),
@@ -268,7 +272,8 @@ pub async fn run_metrics_server(cli_listen: Option<SocketAddr>, config: Config) 
     let recorder_handle = setup_metrics_recorder();
 
     let rest = Router::new()
-        .route("/metrics", get(move || ready(recorder_handle.render())));
+        .route("/metrics", get(move || ready(recorder_handle.render())))
+        .layer(CompressionLayer::new());
 
     eprintln!("Listening on {:?}...", listen);
 
