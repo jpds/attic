@@ -27,6 +27,12 @@ struct Opts {
     #[clap(short = 'l', long)]
     listen: Option<SocketAddr>,
 
+    /// Socket address to listen on for metrics.
+    ///
+    /// This overrides `listen_metrics` in the config.
+    #[clap(short = 'm', long)]
+    listen_metrics: Option<SocketAddr>,
+
     /// Mode to run.
     #[clap(long, default_value = "monolithic")]
     mode: ServerMode,
@@ -73,15 +79,18 @@ async fn main() -> Result<()> {
         ServerMode::Monolithic => {
             attic_server::run_migrations(config.clone()).await?;
 
-            let (api_server, _) = join!(
+            let (api_server, metrics_server, _) = join!(
                 attic_server::run_api_server(opts.listen, config.clone()),
+                attic_server::run_metrics_server(opts.listen_metrics, config.clone()),
                 attic_server::gc::run_garbage_collection(config.clone()),
             );
 
             api_server?;
+            metrics_server?;
         }
         ServerMode::ApiServer => {
-            attic_server::run_api_server(opts.listen, config).await?;
+            attic_server::run_api_server(opts.listen, config.clone()).await?;
+            attic_server::run_metrics_server(opts.listen, config.clone()).await?;
         }
         ServerMode::GarbageCollector => {
             attic_server::gc::run_garbage_collection(config.clone()).await;

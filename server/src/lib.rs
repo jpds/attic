@@ -26,6 +26,7 @@ pub mod nix_manifest;
 pub mod oobe;
 mod storage;
 
+use std::future::ready;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -37,6 +38,8 @@ use axum::{
     http::{uri::Scheme, Uri},
     Router,
 };
+use axum::routing::get;
+use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use sea_orm::{query::Statement, ConnectionTrait, Database, DatabaseConnection};
 use tokio::sync::OnceCell;
 use tokio::time;
@@ -235,6 +238,46 @@ pub async fn run_api_server(cli_listen: Option<SocketAddr>, config: Config) -> R
     Ok(())
 }
 
+fn setup_metrics_recorder() -> PrometheusHandle {
+    const EXPONENTIAL_SECONDS: &[f64] = &[
+        0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+    ];
+
+    PrometheusBuilder::new()
+        .set_buckets_for_metric(
+            Matcher::Full("http_requests_duration_seconds".to_string()),
+            EXPONENTIAL_SECONDS,
+        )
+        .unwrap()
+        .install_recorder()
+        .unwrap()
+}
+
+/// Runs the Prometheus metrics server.
+pub async fn run_metrics_server(cli_listen: Option<SocketAddr>, config: Config) -> Result<()> {
+    eprintln!("Starting metrics server...");
+
+    let state = StateInner::new(config).await;
+
+    let listen = if let Some(cli_listen) = cli_listen {
+        cli_listen
+    } else {
+        state.config.listen_metrics.to_owned()
+    };
+
+    let recorder_handle = setup_metrics_recorder();
+
+    let rest = Router::new()
+        .route("/metrics", get(move || ready(recorder_handle.render())));
+
+    eprintln!("Listening on {:?}...", listen);
+
+    let server_ret = axum::Server::bind(&listen).serve(rest.into_make_service());
+
+    server_ret.await?;
+
+    Ok(())
+}
 /// Runs database migrations.
 pub async fn run_migrations(config: Config) -> Result<()> {
     eprintln!("Running migrations...");

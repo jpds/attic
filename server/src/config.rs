@@ -41,6 +41,10 @@ pub struct Config {
     #[serde(default = "default_listen_address")]
     pub listen: SocketAddr,
 
+    /// Socket address to listen on.
+    #[serde(default = "default_listen_metrics_address")]
+    pub listen_metrics: SocketAddr,
+
     /// Allowed `Host` headers.
     ///
     /// This _must_ be configured for production use. If unconfigured or the
@@ -310,6 +314,10 @@ where
 
 fn default_listen_address() -> SocketAddr {
     "[::]:8080".parse().unwrap()
+}
+
+fn default_listen_metrics_address() -> SocketAddr {
+    "[::]:9180".parse().unwrap()
 }
 
 fn default_db_heartbeat() -> bool {
