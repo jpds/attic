@@ -44,6 +44,8 @@ humantime = "2.1.0"
 humantime-serde = "1.1.1"
 itoa = "=1.0.5"
 maybe-owned = "0.3.4"
+metrics = { version = "0.22", default-features = false }
+metrics-exporter-prometheus = { version = "0.14", default-features = false }
 rand = "0.8.5"
 regex = "1.8.3"
 ryu = "1.0.13"
